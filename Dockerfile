@@ -14,8 +14,8 @@ RUN uv venv /opt/venv
 
 # Copy requirements and install dependencies into the venv
 COPY requirements.txt .
-# Using the venv's uv binary to install packages
-RUN /opt/venv/bin/uv pip install --no-cache-dir -r requirements.txt
+# Activate the venv and use the globally installed uv to install packages into it.
+RUN . /opt/venv/bin/activate && uv pip install --no-cache-dir -r requirements.txt
 
 # Copy the application script into the build stage
 COPY ctfd_init.py .

@@ -176,7 +176,7 @@ def main():
         if check_if_configured(session, CTFD_URL):
             sys.exit(0)
 
-        if not ADMIN_PASSWORD:
+        if ADMIN_PASSWORD is None:
             log_with_context("info", "ADMIN_PASSWORD not set. Polling until configured or retries exhausted.", **log_context)
         else:
             if not all([ADMIN_USERNAME, ADMIN_EMAIL]):

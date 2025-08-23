@@ -1,5 +1,7 @@
 # CTFd Initializer
 
+[![Python CI](https://github.com/petems/docker-ctfd-init/actions/workflows/ci.yml/badge.svg)](https://github.com/petems/docker-ctfd-init/actions/workflows/ci.yml)
+
 A simple, idempotent, and CSRF-aware container to perform the first-boot setup for a [CTFd](https://ctfd.io/) instance. This tool is designed to run as an init/sidecar container in environments like ECS or Kubernetes, ensuring that CTFd is fully configured before it starts accepting traffic.
 
 It is built to be minimal, secure, and configurable entirely through environment variables.
@@ -64,6 +66,8 @@ PROJECT_NAME="My Awesome CTF"
 
 You can run the Python script locally for development and testing purposes. This project uses `uv` for fast dependency management.
 
+### 1. Setup Environment
+
 1.  **Install `uv`:**
     Follow the official instructions at [astral.sh/uv](https://astral.sh/uv).
 
@@ -78,32 +82,57 @@ You can run the Python script locally for development and testing purposes. This
     ```
 
 4.  **Install Dependencies:**
+    Install both production and development dependencies.
     ```sh
-    uv pip install -r requirements.txt
+    uv pip install -r requirements.txt -r requirements-dev.txt
     ```
 
-5.  **Run a Local CTFd Instance:**
+### 2. Running the Initializer Locally
+
+1.  **Run a Local CTFd Instance:**
     For testing, you can easily spin up a CTFd container.
     ```sh
     docker run -p 8000:8000 -itd --name ctfd-test ctfd/ctfd
     ```
 
-6.  **Run the Script:**
-    Create a `.env` file as shown above and run the script. It will configure the running Docker container.
+2.  **Run the Script:**
+    Create a `.env` file as shown in the Configuration section. Then, load the environment variables and run the script.
     ```sh
-    # For local execution, ensure the environment variables from your .env
-    # file are loaded into your shell. A robust way to do this, which handles
-    # special characters, is to source the file:
-    #
-    # set -a; source .env; set +a
-    #
-    # After loading the variables, run the script:
+    # A robust way to load .env files that handle special characters:
+    set -a; source .env; set +a
+
+    # Run the initializer
     python ctfd_init.py
     ```
 
-7.  **Clean Up:**
-    When you are done, you can stop and remove the test container.
+3.  **Clean Up:**
+    When you are done, stop and remove the test container.
     ```sh
     docker stop ctfd-test
     docker rm ctfd-test
     ```
+
+### 3. Running Tests
+
+This project includes a suite of unit tests and a linter.
+
+-   **Run Linting (Ruff):**
+    ```sh
+    ruff check .
+    ```
+
+-   **Run Unit Tests (Pytest):**
+    ```sh
+    pytest
+    ```
+
+## CI/CD Pipeline
+
+This project is equipped with a comprehensive CI/CD pipeline using GitHub Actions, defined in `.github/workflows/ci.yml`. The pipeline automatically runs on every push and pull request to the `main` branch to ensure code quality, correctness, and security.
+
+The pipeline includes the following jobs:
+- **Linting**: Checks for code style issues using `ruff`.
+- **Unit Tests**: Runs the full suite of unit tests using `pytest`.
+- **Security Scan (Code)**: Performs static analysis on the Python code for potential vulnerabilities using `bandit`.
+- **Docker Build & Scan**: Builds the production Docker image and scans it for vulnerabilities in the OS packages and libraries using `trivy`.
+- **Acceptance Test**: Runs a live, end-to-end test to ensure the initializer works correctly against a real CTFd instance.
