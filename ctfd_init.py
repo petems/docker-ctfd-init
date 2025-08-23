@@ -162,7 +162,7 @@ def main():
     }
     if os.environ.get('NO_PROXY'):
         from urllib.parse import urlparse
-        if urlparse(CTFD_URL).hostname in os.environ['NO_PROXY'].split(','):
+        if urlparse(CTFD_URL).hostname in {h.strip() for h in os.environ['NO_PROXY'].split(',')}:
             session.proxies = {}
 
 
