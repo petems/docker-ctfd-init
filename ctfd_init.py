@@ -144,9 +144,7 @@ def perform_setup(session, url, nonce):
             log_with_context("info", "Setup POST successful (got redirect).", **log_context)
             return True
         else:
-            log_with_context("error", "Setup POST failed.", **log_context)
-            # Log a snippet of the response if possible, avoiding full HTML dumps
-            log.error(f"Response snippet: {resp.text[:200]}")
+            log_with_context("error", "Setup POST failed.", response_snippet=resp.text[:200], **log_context)
             return False
 
     except RequestException as e:
