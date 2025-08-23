@@ -34,18 +34,22 @@ To use this initializer, you can build the Docker image and run it, pointing it 
 
 The initializer is configured using the following environment variables.
 
-| Variable                | Description                                                               | Required | Default        |
-| ----------------------- | ------------------------------------------------------------------------- | -------- | -------------- |
-| `CTFD_URL`              | The base URL of the CTFd instance (e.g., `http://localhost:8000`).        | **Yes**  | -              |
-| `ADMIN_USERNAME`        | The desired username for the admin account.                               | **Yes**  | -              |
-| `ADMIN_EMAIL`           | The desired email for the admin account.                                  | **Yes**  | -              |
-| `ADMIN_PASSWORD`        | The admin account password. If empty, the script only polls for readiness. | No       | ""             |
-| `PROJECT_NAME`          | The name of the CTF project.                                              | No       | "CTF"          |
-| `TIMEOUT_SECONDS`       | Timeout in seconds for individual HTTP requests.                          | No       | 10             |
-| `RETRY_ATTEMPTS`        | Maximum number of attempts to configure CTFd.                             | No       | 60             |
-| `RETRY_BACKOFF_SECONDS` | The initial backoff duration in seconds for retries.                      | No       | 2              |
-| `VERIFY_TLS`            | Set to `false` to disable TLS certificate verification (for testing only).| No       | `true`         |
-| `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` | Standard proxy configuration. | No | - |
+| Variable | Description | Required | Default |
+| :--- | :--- | :--- | :--- |
+| `CTFD_URL` | The base URL of the CTFd instance (e.g., `http://localhost:8000`). | **Yes** | - |
+| `ADMIN_USERNAME` | The desired username for the admin account. | **Yes** | - |
+| `ADMIN_EMAIL` | The desired email for the admin account. | **Yes** | - |
+| `ADMIN_PASSWORD` | The admin password. If unset, the script only polls for readiness. | No | - |
+| `PROJECT_NAME` | The name of the CTF project. | No | `"CTF"` |
+| `CTF_DESCRIPTION`| A description for the CTF. | No | `""` |
+| `CTF_THEME` | The theme to use for the CTF. | No | `"core"` |
+| `CTF_TIMEZONE` | The timezone for the CTF. | No | `"UTC"` |
+| `CTF_LANG` | The language for the CTF. | No | `"en"` |
+| `TIMEOUT_SECONDS` | Timeout in seconds for individual HTTP requests. | No | `10` |
+| `RETRY_ATTEMPTS` | Maximum number of attempts to configure CTFd. | No | `60` |
+| `RETRY_BACKOFF_SECONDS` | The initial backoff duration in seconds for retries. | No | `2` |
+| `VERIFY_TLS` | Set to `false` to disable TLS certificate verification. | No | `true` |
+| `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` | Standard proxy configuration (handled automatically by `requests`). | No | - |
 
 ### Example `.env` file:
 ```env
@@ -87,8 +91,13 @@ You can run the Python script locally for development and testing purposes. This
 6.  **Run the Script:**
     Create a `.env` file as shown above and run the script. It will configure the running Docker container.
     ```sh
-    # Make sure to load your .env file variables into your shell first
-    # For example, by using `export $(cat .env | xargs)`
+    # For local execution, ensure the environment variables from your .env
+    # file are loaded into your shell. A robust way to do this, which handles
+    # special characters, is to source the file:
+    #
+    # set -a; source .env; set +a
+    #
+    # After loading the variables, run the script:
     python ctfd_init.py
     ```
 

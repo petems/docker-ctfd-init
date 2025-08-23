@@ -14,9 +14,14 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 PROJECT_NAME = os.getenv("PROJECT_NAME", "CTF")
-TIMEOUT_SECONDS = int(os.getenv("TIMEOUT_SECONDS", 10))
-RETRY_ATTEMPTS = int(os.getenv("RETRY_ATTEMPTS", 60))
-RETRY_BACKOFF_SECONDS = int(os.getenv("RETRY_BACKOFF_SECONDS", 2))
+try:
+    TIMEOUT_SECONDS = int(os.getenv("TIMEOUT_SECONDS", "10"))
+    RETRY_ATTEMPTS = int(os.getenv("RETRY_ATTEMPTS", "60"))
+    RETRY_BACKOFF_SECONDS = int(os.getenv("RETRY_BACKOFF_SECONDS", "2"))
+except ValueError:
+    # Logging is not set up yet, so print a JSON error to stderr and exit.
+    print(json.dumps({"level": "ERROR", "msg": "Configuration error: TIMEOUT_SECONDS, RETRY_ATTEMPTS, and RETRY_BACKOFF_SECONDS must be integers."}), file=sys.stderr)
+    sys.exit(10)
 VERIFY_TLS = os.getenv("VERIFY_TLS", "true").lower() == "true"
 
 # --- Logging ---
@@ -111,10 +116,10 @@ def perform_setup(session, url, nonce):
         "name": ADMIN_USERNAME,
         "email": ADMIN_EMAIL,
         "password": ADMIN_PASSWORD,
-        "ctf_description": "",
-        "theme": "core",
-        "ctf_timezone": "UTC",
-        "lang": "en",
+        "ctf_description": os.getenv("CTF_DESCRIPTION", ""),
+        "theme": os.getenv("CTF_THEME", "core"),
+        "ctf_timezone": os.getenv("CTF_TIMEZONE", "UTC"),
+        "lang": os.getenv("CTF_LANG", "en"),
     }
 
     # Redact password for logging
@@ -154,16 +159,15 @@ def main():
         log_with_context("error", "CTFD_URL environment variable is not set. Exiting.")
         sys.exit(10)
 
+    # Fail fast if password is provided but empty, which is a security risk.
+    if ADMIN_PASSWORD == "":
+        log_with_context("error", "ADMIN_PASSWORD is set but empty. A non-empty password is required. Exiting.")
+        sys.exit(10)
+
     session = requests.Session()
     session.verify = VERIFY_TLS
-    # Support proxy settings from environment
-    session.proxies = {
-        'http': os.environ.get('HTTP_PROXY'),
-        'https': os.environ.get('HTTPS_PROXY'),
-    }
-    if os.environ.get('NO_PROXY'):
-        if urlparse(CTFD_URL).hostname in os.environ['NO_PROXY'].split(','):
-            session.proxies = {}
+    # The requests library automatically handles proxy settings from the environment
+    # (HTTP_PROXY, HTTPS_PROXY, NO_PROXY), so manual configuration is not needed.
 
 
     for attempt in range(1, RETRY_ATTEMPTS + 1):
