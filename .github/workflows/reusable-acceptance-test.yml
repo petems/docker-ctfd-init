@@ -1,0 +1,26 @@
+# Reusable workflow for running the end-to-end acceptance test.
+name: Reusable Acceptance Test
+
+on:
+  workflow_call:
+
+jobs:
+  acceptance-test:
+    name: Acceptance Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Make acceptance test script executable
+        run: chmod +x tests/acceptance_test.sh
+
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install -y coreutils
+
+      - name: Run acceptance test
+        run: ./tests/acceptance_test.sh
+        # Note: This test pulls the public ctfd/ctfd image from Docker Hub.
+        # If this step fails due to rate limiting, you may need to add
+        # a `docker login` step using repository secrets.
+        # See: https://github.com/docker/login-action

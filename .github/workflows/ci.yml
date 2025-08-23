@@ -1,5 +1,6 @@
-# This GitHub Actions workflow defines the Continuous Integration (CI) pipeline.
-# It includes jobs for linting and running unit tests.
+# This is the main "caller" workflow.
+# It orchestrates the CI pipeline by calling reusable workflows for each major stage.
+# This keeps the main pipeline definition clean and easy to understand.
 name: Python CI
 
 on:
@@ -14,97 +15,18 @@ permissions:
 jobs:
   lint:
     name: Linting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: pip install ruff
-      - name: Run linter
-        run: ruff check .
+    uses: ./.github/workflows/reusable-lint.yml
 
   unit-test:
     name: Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install uv and dependencies
-        run: |
-          pip install uv
-          uv venv
-          . .venv/bin/activate
-          uv pip install -r requirements.txt -r requirements-dev.txt
-      - name: Run unit tests
-        run: |
-          . .venv/bin/activate
-          pytest tests/
+    uses: ./.github/workflows/reusable-unit-test.yml
 
-  security-scan-code:
-    name: Security Scan (Bandit)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install Bandit
-        run: pip install bandit
-      - name: Run Bandit
-        # Scan all files, report on medium confidence/severity (default)
-        run: bandit -r .
-
-  docker-build-and-scan-image:
-    name: Docker Build & Scan (Trivy)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build the Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          load: true
-          tags: ctfd-initializer:ci-scan
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'ctfd-initializer:ci-scan'
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+  security:
+    name: Security Scans
+    uses: ./.github/workflows/reusable-security.yml
 
   acceptance-test:
     name: Acceptance Test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Make acceptance test script executable
-        run: chmod +x tests/acceptance_test.sh
-
-      - name: Install test dependencies
-        run: sudo apt-get update && sudo apt-get install -y coreutils
-
-      - name: Run acceptance test
-        run: ./tests/acceptance_test.sh
-        # Note: This test pulls the public ctfd/ctfd image from Docker Hub.
-        # If this step fails due to rate limiting, you may need to add
-        # a `docker login` step using repository secrets.
-        # See: https://github.com/docker/login-action
+    # This job depends on the others to ensure code is linted, tested, and scanned first.
+    needs: [lint, unit-test, security]
+    uses: ./.github/workflows/reusable-acceptance-test.yml
