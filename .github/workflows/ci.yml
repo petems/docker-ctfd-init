@@ -99,6 +99,9 @@ jobs:
       - name: Make acceptance test script executable
         run: chmod +x tests/acceptance_test.sh
 
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install -y coreutils
+
       - name: Run acceptance test
         run: ./tests/acceptance_test.sh
         # Note: This test pulls the public ctfd/ctfd image from Docker Hub.
