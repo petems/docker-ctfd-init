@@ -6,7 +6,6 @@ import logging
 import requests
 from bs4 import BeautifulSoup
 from requests.exceptions import RequestException
-from urllib.parse import urlparse
 
 # --- Configuration ---
 CTFD_URL = os.getenv("CTFD_URL")
@@ -144,7 +143,9 @@ def perform_setup(session, url, nonce):
             log_with_context("info", "Setup POST successful (got redirect).", **log_context)
             return True
         else:
-            log_with_context("error", "Setup POST failed.", response_snippet=resp.text[:200], **log_context)
+            log_with_context("error", "Setup POST failed.", **log_context)
+            # Log a snippet of the response if possible, avoiding full HTML dumps
+            log.error(f"Response snippet: {resp.text[:200]}")
             return False
 
     except RequestException as e:
