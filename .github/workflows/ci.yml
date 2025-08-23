@@ -1,0 +1,32 @@
+# This is the main "caller" workflow.
+# It orchestrates the CI pipeline by calling reusable workflows for each major stage.
+# This keeps the main pipeline definition clean and easy to understand.
+name: Python CI
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Linting
+    uses: ./.github/workflows/reusable-lint.yml
+
+  unit-test:
+    name: Unit Tests
+    uses: ./.github/workflows/reusable-unit-test.yml
+
+  security:
+    name: Security Scans
+    uses: ./.github/workflows/reusable-security.yml
+
+  acceptance-test:
+    name: Acceptance Test
+    # This job depends on the others to ensure code is linted, tested, and scanned first.
+    needs: [lint, unit-test, security]
+    uses: ./.github/workflows/reusable-acceptance-test.yml

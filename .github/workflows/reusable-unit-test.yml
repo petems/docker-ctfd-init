@@ -1,0 +1,27 @@
+# Reusable workflow for running unit tests.
+name: Reusable Unit Tests
+
+on:
+  workflow_call:
+
+jobs:
+  unit-test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install uv and dependencies
+        run: |
+          pip install uv
+          uv venv
+          . .venv/bin/activate
+          uv pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run unit tests
+        run: |
+          . .venv/bin/activate
+          pytest tests/
