@@ -124,7 +124,7 @@ def perform_setup(session, url, nonce):
     # Redact password for logging
     log_form_data = form_data.copy()
     if "password" in log_form_data:
-        log_form_data["password"] = "[REDACTED]"
+        log_form_data["password"] = "[REDACTED]"  # nosec B105
 
     log_with_context("info", "Posting setup form...", url=setup_url, data=log_form_data)
 
@@ -159,7 +159,7 @@ def main():
         sys.exit(10)
 
     # Fail fast if password is provided but empty, which is a security risk.
-    if ADMIN_PASSWORD == "":
+    if ADMIN_PASSWORD == "":  # nosec B105
         log_with_context("error", "ADMIN_PASSWORD is set but empty. A non-empty password is required. Exiting.")
         sys.exit(10)
 
