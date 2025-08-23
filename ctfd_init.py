@@ -6,6 +6,7 @@ import logging
 import requests
 from bs4 import BeautifulSoup
 from requests.exceptions import RequestException
+from urllib.parse import urlparse
 
 # --- Configuration ---
 CTFD_URL = os.getenv("CTFD_URL")
@@ -161,8 +162,7 @@ def main():
         'https': os.environ.get('HTTPS_PROXY'),
     }
     if os.environ.get('NO_PROXY'):
-        from urllib.parse import urlparse
-        if urlparse(CTFD_URL).hostname in {h.strip() for h in os.environ['NO_PROXY'].split(',')}:
+        if urlparse(CTFD_URL).hostname in os.environ['NO_PROXY'].split(','):
             session.proxies = {}
 
 

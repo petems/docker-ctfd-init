@@ -87,8 +87,8 @@ You can run the Python script locally for development and testing purposes. This
 6.  **Run the Script:**
     Create a `.env` file as shown above and run the script. It will configure the running Docker container.
     ```sh
-    # Make sure to load your .env file variables into your shell first.
-    # A robust way for bash/zsh is: `set -a; source .env; set +a`
+    # Make sure to load your .env file variables into your shell first
+    # For example, by using `export $(cat .env | xargs)`
     python ctfd_init.py
     ```
 
