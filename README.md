@@ -41,7 +41,7 @@ The initializer is configured using the following environment variables.
 | `ADMIN_EMAIL` | The desired email for the admin account. | **Yes** | - |
 | `ADMIN_PASSWORD` | The admin password. If unset, the script only polls for readiness. | No | - |
 | `PROJECT_NAME` | The name of the CTF project. | No | `"CTF"` |
-| `CTF_DESCRIPTION`| A description for the CTF. | No | `""` |
+| `CTF_DESCRIPTION` | A description for the CTF. | No | `""` |
 | `CTF_THEME` | The theme to use for the CTF. | No | `"core"` |
 | `CTF_TIMEZONE` | The timezone for the CTF. | No | `"UTC"` |
 | `CTF_LANG` | The language for the CTF. | No | `"en"` |
