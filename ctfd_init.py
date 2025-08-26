@@ -8,6 +8,7 @@ plus the `requests` package for HTTP interactions.
 The behaviour is driven by environment variables as documented in
 `DOCKER_SPEC.md`.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -15,11 +16,10 @@ import json
 import logging
 import os
 import re
+import secrets
 import sys
 import time
-import random
 from dataclasses import dataclass
-from typing import Optional
 
 import requests
 
@@ -37,9 +37,9 @@ class SetupError(RuntimeError):
 @dataclass
 class Config:
     ctfd_url: str
-    admin_username: Optional[str]
-    admin_email: Optional[str]
-    admin_password: Optional[str]
+    admin_username: str | None
+    admin_email: str | None
+    admin_password: str | None
     project_name: str = "CTF"
     timeout: int = 10
     attempts: int = 60
@@ -49,7 +49,7 @@ class Config:
     verify_tls: bool = True
 
     @classmethod
-    def from_env(cls) -> "Config":
+    def from_env(cls) -> Config:
         ctfd_url = os.environ.get("CTFD_URL")
         if not ctfd_url:
             raise SetupError("CTFD_URL is required", exit_code=12)
@@ -78,7 +78,7 @@ class Config:
         )
 
 
-def extract_nonce(html: str) -> Optional[str]:
+def extract_nonce(html: str) -> str | None:
     """Extract CSRF nonce from setup HTML."""
     match = re.search(r"name=['\"]nonce['\"]\s+value=['\"]([^'\"]+)['\"]", html)
     if match:
@@ -89,6 +89,7 @@ def extract_nonce(html: str) -> Optional[str]:
 def already_configured(response: requests.Response) -> bool:
     """Return True if the /setup endpoint redirects away, meaning configured."""
     return 300 <= response.status_code < 400
+
 
 def post_setup(session: requests.Session, cfg: Config, nonce: str) -> requests.Response:
     data = {
@@ -111,15 +112,22 @@ def post_setup(session: requests.Session, cfg: Config, nonce: str) -> requests.R
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
 
+
 def _sleep_with_backoff(cfg: Config, attempt: int) -> None:
     base = min(cfg.max_backoff, cfg.backoff * (2 ** (attempt - 1)))
-    delay = base * (0.5 + random.random() * 0.5) if cfg.jitter else base
+    if cfg.jitter:
+        # Use cryptographically strong randomness to avoid Bandit B311
+        # (not security-critical here, but keeps scanners happy):
+        jitter_unit = secrets.randbelow(10_000) / 10_000.0  # [0.0, 1.0)
+        delay = base * (0.5 + jitter_unit * 0.5)
+    else:
+        delay = base
     time.sleep(delay)
 
 
 def configure(cfg: Config) -> None:
     session = requests.Session()
-    last_error: Optional[str] = None
+    last_error: str | None = None
     for attempt in range(1, cfg.attempts + 1):
         start = time.time()
         try:
@@ -135,7 +143,7 @@ def configure(cfg: Config) -> None:
                 json.dumps(
                     {
                         "level": "warning",
-                        "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                        "ts": datetime.datetime.now(datetime.UTC).isoformat(),
                         "msg": "GET /setup failed",
                         "error": str(e),
                         "attempt": attempt,
@@ -149,7 +157,7 @@ def configure(cfg: Config) -> None:
             json.dumps(
                 {
                     "level": "info",
-                    "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "ts": datetime.datetime.now(datetime.UTC).isoformat(),
                     "attempt": attempt,
                     "status": resp.status_code,
                     "url": f"{cfg.ctfd_url}/setup",
@@ -163,7 +171,7 @@ def configure(cfg: Config) -> None:
                 json.dumps(
                     {
                         "level": "info",
-                        "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                        "ts": datetime.datetime.now(datetime.UTC).isoformat(),
                         "msg": "Already configured",
                     }
                 )
@@ -178,9 +186,7 @@ def configure(cfg: Config) -> None:
                         json.dumps(
                             {
                                 "level": "warning",
-                                "ts": datetime.datetime.now(
-                                    datetime.timezone.utc
-                                ).isoformat(),
+                                "ts": datetime.datetime.now(datetime.UTC).isoformat(),
                                 "msg": "POST to /setup did not result in a redirect",
                                 "status": post_resp.status_code,
                             }
@@ -203,9 +209,7 @@ def configure(cfg: Config) -> None:
                         json.dumps(
                             {
                                 "level": "info",
-                                "ts": datetime.datetime.now(
-                                    datetime.timezone.utc
-                                ).isoformat(),
+                                "ts": datetime.datetime.now(datetime.UTC).isoformat(),
                                 "msg": "Configured successfully",
                             }
                         )
@@ -221,6 +225,7 @@ def configure(cfg: Config) -> None:
         raise SetupError("setup POST failed after retries", exit_code=12)
     raise SetupError("setup not completed after retries", exit_code=10)
 
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
@@ -231,7 +236,7 @@ def main() -> int:
             json.dumps(
                 {
                     "level": "error",
-                    "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "ts": datetime.datetime.now(datetime.UTC).isoformat(),
                     "msg": str(exc),
                 }
             )

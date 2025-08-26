@@ -1,13 +1,13 @@
+import pytest
 import requests
 import responses
-import pytest
 
 from ctfd_init import (
-    extract_nonce,
-    already_configured,
     Config,
-    configure,
     SetupError,
+    already_configured,
+    configure,
+    extract_nonce,
 )
 
 
