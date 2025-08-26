@@ -15,21 +15,20 @@ help:
 	@echo "  make pre-commit  - install git hooks"
 
 install:
-	$(UV) venv --seed || true
-	$(UV) pip install -r requirements.txt -r requirements-dev.txt
+	$(UV) sync --dev
 
 test:
-	PYTHONPATH=. .venv/bin/pytest -q
+	$(UV) run pytest -q
 
 lint:
-	.venv/bin/ruff check .
+	$(UV) run ruff check .
 
 lint-fix:
-	.venv/bin/ruff check . --fix
-	.venv/bin/ruff format
+	$(UV) run ruff check . --fix
+	$(UV) run ruff format
 
 security:
-	.venv/bin/bandit -q -r ctfd_init.py
+	$(UV) run bandit -q -r ctfd_init.py
 
 build:
 	docker build -t ctfd-initializer .
@@ -38,7 +37,7 @@ run:
 	docker run --rm --env-file .env ctfd-initializer
 
 pre-commit:
-	.venv/bin/pre-commit install
+	$(UV) run pre-commit install
 
 clean:
 	rm -rf .venv .pytest_cache __pycache__

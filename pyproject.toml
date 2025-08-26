@@ -1,3 +1,26 @@
+[project]
+name = "ctfd-init"
+version = "0.1.0"
+description = "CTFd initialization script for automated setup"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests==2.32.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.2.2",
+    "responses==0.25.2", 
+    "ruff==0.7.2",
+    "bandit==1.7.10",
+    "pre-commit==3.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100
