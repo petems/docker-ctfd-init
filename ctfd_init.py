@@ -10,12 +10,14 @@ The behaviour is driven by environment variables as documented in
 """
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import os
 import re
 import sys
 import time
+import random
 from dataclasses import dataclass
 from typing import Optional
 
@@ -26,6 +28,10 @@ LOG = logging.getLogger("ctfd_init")
 
 class SetupError(RuntimeError):
     """Raised when the setup process ultimately fails."""
+
+    def __init__(self, message, exit_code=1):
+        super().__init__(message)
+        self.exit_code = exit_code
 
 
 @dataclass
@@ -38,33 +44,43 @@ class Config:
     timeout: int = 10
     attempts: int = 60
     backoff: int = 2
+    max_backoff: int = 30
+    jitter: bool = True
     verify_tls: bool = True
 
     @classmethod
     def from_env(cls) -> "Config":
-        def getenv(name: str, default: Optional[str] = None) -> Optional[str]:
-            value = os.environ.get(name, default)
-            return value
-
         ctfd_url = os.environ.get("CTFD_URL")
         if not ctfd_url:
-            raise SetupError("CTFD_URL is required")
+            raise SetupError("CTFD_URL is required", exit_code=12)
+
+        try:
+            timeout = int(os.environ.get("TIMEOUT_SECONDS", "10"))
+            attempts = int(os.environ.get("RETRY_ATTEMPTS", "60"))
+            backoff = int(os.environ.get("RETRY_BACKOFF_SECONDS", "2"))
+        except ValueError as e:
+            raise SetupError(
+                f"Invalid integer value in environment variable: {e}", exit_code=12
+            ) from e
+
         return cls(
             ctfd_url=ctfd_url.rstrip("/"),
-            admin_username=getenv("ADMIN_USERNAME"),
-            admin_email=getenv("ADMIN_EMAIL"),
-            admin_password=getenv("ADMIN_PASSWORD"),
-            project_name=getenv("PROJECT_NAME", "CTF"),
-            timeout=int(getenv("TIMEOUT_SECONDS", "10")),
-            attempts=int(getenv("RETRY_ATTEMPTS", "60")),
-            backoff=int(getenv("RETRY_BACKOFF_SECONDS", "2")),
-            verify_tls=getenv("VERIFY_TLS", "true").lower() == "true",
+            admin_username=os.environ.get("ADMIN_USERNAME"),
+            admin_email=os.environ.get("ADMIN_EMAIL"),
+            admin_password=os.environ.get("ADMIN_PASSWORD"),
+            project_name=os.environ.get("PROJECT_NAME", "CTF"),
+            timeout=timeout,
+            attempts=attempts,
+            backoff=backoff,
+            max_backoff=int(os.environ.get("MAX_BACKOFF_SECONDS", "30")),
+            jitter=os.environ.get("JITTER", "true").lower() == "true",
+            verify_tls=os.environ.get("VERIFY_TLS", "true").lower() == "true",
         )
 
 
 def extract_nonce(html: str) -> Optional[str]:
     """Extract CSRF nonce from setup HTML."""
-    match = re.search(r'name=[\"\']nonce[\"\']\s+value=[\"\']([^\"\']+)[\"\']', html)
+    match = re.search(r"name=['\"]nonce['\"]\s+value=['\"]([^'\"]+)['\"]", html)
     if match:
         return match.group(1)
     return None
@@ -74,8 +90,7 @@ def already_configured(response: requests.Response) -> bool:
     """Return True if the /setup endpoint redirects away, meaning configured."""
     return 300 <= response.status_code < 400
 
-
-def post_setup(session: requests.Session, cfg: Config, nonce: str) -> None:
+def post_setup(session: requests.Session, cfg: Config, nonce: str) -> requests.Response:
     data = {
         "nonce": nonce,
         "ctf_name": cfg.project_name,
@@ -87,7 +102,7 @@ def post_setup(session: requests.Session, cfg: Config, nonce: str) -> None:
         "ctf_timezone": "UTC",
         "lang": "en",
     }
-    session.post(
+    return session.post(
         f"{cfg.ctfd_url}/setup",
         data=data,
         allow_redirects=False,
@@ -96,45 +111,115 @@ def post_setup(session: requests.Session, cfg: Config, nonce: str) -> None:
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
 
+def _sleep_with_backoff(cfg: Config, attempt: int) -> None:
+    base = min(cfg.max_backoff, cfg.backoff * (2 ** (attempt - 1)))
+    delay = base * (0.5 + random.random() * 0.5) if cfg.jitter else base
+    time.sleep(delay)
+
 
 def configure(cfg: Config) -> None:
     session = requests.Session()
+    last_error: Optional[str] = None
     for attempt in range(1, cfg.attempts + 1):
         start = time.time()
-        resp = session.get(
-            f"{cfg.ctfd_url}/setup",
-            allow_redirects=False,
-            timeout=cfg.timeout,
-            verify=cfg.verify_tls,
-        )
-        elapsed = int((time.time() - start) * 1000)
-        LOG.info(json.dumps({
-            "level": "info",
-            "attempt": attempt,
-            "status": resp.status_code,
-            "url": f"{cfg.ctfd_url}/setup",
-            "elapsed_ms": elapsed,
-            "msg": "GET /setup"
-        }))
-        if already_configured(resp):
-            LOG.info(json.dumps({"level": "info", "msg": "Already configured"}))
-            return
-        nonce = extract_nonce(resp.text)
-        if nonce and cfg.admin_password:
-            post_setup(session, cfg, nonce)
-            # verify
-            verify_resp = session.get(
+        try:
+            resp = session.get(
                 f"{cfg.ctfd_url}/setup",
                 allow_redirects=False,
                 timeout=cfg.timeout,
                 verify=cfg.verify_tls,
             )
-            if already_configured(verify_resp):
-                LOG.info(json.dumps({"level": "info", "msg": "Configured successfully"}))
-                return
-        time.sleep(cfg.backoff)
-    raise SetupError("setup not completed after retries")
-
+        except requests.RequestException as e:
+            last_error = f"request error: {e}"
+            LOG.warning(
+                json.dumps(
+                    {
+                        "level": "warning",
+                        "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                        "msg": "GET /setup failed",
+                        "error": str(e),
+                        "attempt": attempt,
+                    }
+                )
+            )
+            _sleep_with_backoff(cfg, attempt)
+            continue
+        elapsed = int((time.time() - start) * 1000)
+        LOG.info(
+            json.dumps(
+                {
+                    "level": "info",
+                    "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "attempt": attempt,
+                    "status": resp.status_code,
+                    "url": f"{cfg.ctfd_url}/setup",
+                    "elapsed_ms": elapsed,
+                    "msg": "GET /setup",
+                }
+            )
+        )
+        if already_configured(resp):
+            LOG.info(
+                json.dumps(
+                    {
+                        "level": "info",
+                        "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                        "msg": "Already configured",
+                    }
+                )
+            )
+            return
+        nonce = extract_nonce(resp.text)
+        if cfg.admin_password:
+            if nonce:
+                post_resp = post_setup(session, cfg, nonce)
+                if not 300 <= post_resp.status_code < 400:
+                    LOG.warning(
+                        json.dumps(
+                            {
+                                "level": "warning",
+                                "ts": datetime.datetime.now(
+                                    datetime.timezone.utc
+                                ).isoformat(),
+                                "msg": "POST to /setup did not result in a redirect",
+                                "status": post_resp.status_code,
+                            }
+                        )
+                    )
+                # verify
+                try:
+                    verify_resp = session.get(
+                        f"{cfg.ctfd_url}/setup",
+                        allow_redirects=False,
+                        timeout=cfg.timeout,
+                        verify=cfg.verify_tls,
+                    )
+                except requests.RequestException as e:
+                    last_error = f"verify error: {e}"
+                    _sleep_with_backoff(cfg, attempt)
+                    continue
+                if already_configured(verify_resp):
+                    LOG.info(
+                        json.dumps(
+                            {
+                                "level": "info",
+                                "ts": datetime.datetime.now(
+                                    datetime.timezone.utc
+                                ).isoformat(),
+                                "msg": "Configured successfully",
+                            }
+                        )
+                    )
+                    return
+                last_error = "setup POST did not complete configuration"
+            else:
+                last_error = "nonce not found in setup page"
+        _sleep_with_backoff(cfg, attempt)
+    if last_error == "nonce not found in setup page":
+        raise SetupError("nonce not found after retries", exit_code=11)
+    if last_error == "setup POST did not complete configuration":
+        raise SetupError("setup POST failed after retries", exit_code=12)
+    raise SetupError("setup not completed after retries", exit_code=10)
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -142,11 +227,18 @@ def main() -> int:
         cfg = Config.from_env()
         configure(cfg)
     except SetupError as exc:
-        LOG.error(json.dumps({"level": "error", "msg": str(exc)}))
-        return 1
+        LOG.error(
+            json.dumps(
+                {
+                    "level": "error",
+                    "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "msg": str(exc),
+                }
+            )
+        )
+        return exc.exit_code
     return 0
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry
     sys.exit(main())
-
