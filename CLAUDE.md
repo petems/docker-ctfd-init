@@ -4,30 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Environment
 
-This project uses `uv` for fast dependency management. Set up the development environment:
+This project uses `uv` for fast dependency management, but also supports standard pip workflows. Set up the development environment:
 
 ```bash
-# Create virtual environment
+# Using uv (preferred)
 uv venv
-
-# Activate environment
-source .venv/bin/activate
-
-# Install dependencies
 uv pip install -r requirements.txt -r requirements-dev.txt
+
+# Or using Make (handles uv automatically)
+make install
+
+# Traditional pip approach (if uv unavailable)
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 ## Common Commands
 
 ### Testing
-- **Run unit tests**: `pytest`
+- **Run unit tests**: `make test` or `pytest`
 - **Run tests with coverage**: `pytest --cov=ctfd_init`
 - **Run single test**: `pytest tests/test_init.py::test_function_name`
 
 ### Code Quality
-- **Run linter**: `ruff check .`
-- **Auto-fix linting issues**: `ruff check . --fix`
-- **Run security scan**: `bandit -r ctfd_init.py`
+- **Run linter**: `make lint` or `ruff check .`
+- **Auto-fix linting issues**: `make lint-fix` or `ruff check . --fix && ruff format`
+- **Run security scan**: `make security` or `bandit -r ctfd_init.py`
 
 ### Local Testing
 - **Start test CTFd instance**: `docker run -p 8000:8000 -itd --name ctfd-test ctfd/ctfd`
@@ -35,8 +37,12 @@ uv pip install -r requirements.txt -r requirements-dev.txt
 - **Clean up test container**: `docker stop ctfd-test && docker rm ctfd-test`
 
 ### Docker
-- **Build image**: `docker build -t ctfd-initializer .`
-- **Run container**: `docker run --rm --env-file .env ctfd-initializer`
+- **Build image**: `make build` or `docker build -t ctfd-initializer .`
+- **Run container**: `make run` or `docker run --rm --env-file .env ctfd-initializer`
+
+### Pre-commit Hooks
+- **Install pre-commit**: `make pre-commit`
+- **Run on all files**: `. .venv/bin/activate && pre-commit run --all-files`
 
 ## Architecture
 

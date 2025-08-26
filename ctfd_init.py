@@ -58,6 +58,7 @@ class Config:
             timeout = int(os.environ.get("TIMEOUT_SECONDS", "10"))
             attempts = int(os.environ.get("RETRY_ATTEMPTS", "60"))
             backoff = int(os.environ.get("RETRY_BACKOFF_SECONDS", "2"))
+            max_backoff = int(os.environ.get("MAX_BACKOFF_SECONDS", "30"))
         except ValueError as e:
             raise SetupError(
                 f"Invalid integer value in environment variable: {e}", exit_code=12
@@ -72,7 +73,7 @@ class Config:
             timeout=timeout,
             attempts=attempts,
             backoff=backoff,
-            max_backoff=int(os.environ.get("MAX_BACKOFF_SECONDS", "30")),
+            max_backoff=max_backoff,
             jitter=os.environ.get("JITTER", "true").lower() == "true",
             verify_tls=os.environ.get("VERIFY_TLS", "true").lower() == "true",
         )
