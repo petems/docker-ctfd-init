@@ -13,6 +13,16 @@ permissions:
 jobs:
   acceptance:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ctfd_image: ctfd/ctfd:latest
+            experimental: false
+          - ctfd_image: ctfd/ctfd:3.7.0
+            experimental: true
+          - ctfd_image: ctfd/ctfd:3.6.0
+            experimental: true
 
     # Start a Docker daemon as a sidecar (DinD) and connect via DOCKER_HOST
     services:
@@ -24,11 +34,14 @@ jobs:
         ports:
           - 2375:2375
 
+    continue-on-error: ${{ matrix.experimental }}
+
     env:
       DOCKER_HOST: tcp://localhost:2375
       DOCKER_BUILDKIT: "1"
       STREAM_DOCKER_LOGS: "0"
       SNIPPET_LEN: "2000"
+      CTFD_IMAGE: ${{ matrix.ctfd_image }}
 
     steps:
       - name: Checkout
@@ -57,7 +70,7 @@ jobs:
           docker info
 
       - name: Pre-pull CTFd image
-        run: docker pull ctfd/ctfd:latest
+        run: docker pull "${{ matrix.ctfd_image }}"
 
       - name: Sync dependencies (dev)
         run: uv sync --dev

@@ -59,6 +59,14 @@ def is_docker_available():
         return False
 
 
+def _ctfd_image_default() -> str:
+    """Return the CTFd image reference to use for acceptance tests.
+
+    Respects env var `CTFD_IMAGE` and defaults to `ctfd/ctfd:latest`.
+    """
+    return os.environ.get("CTFD_IMAGE", "ctfd/ctfd:latest").strip()
+
+
 @contextmanager
 def ctfd_container(port=18000, container_name="ctfd-acceptance-test"):
     """Context manager that starts and cleans up a CTFd container."""
@@ -78,13 +86,17 @@ def ctfd_container(port=18000, container_name="ctfd-acceptance-test"):
         
         _print(f"Starting CTFd container '{container_name}' on port {port}...")
         # Start CTFd container
+        image = _ctfd_image_default()
         container = client.containers.run(
-            "ctfd/ctfd",
+            image,
             name=container_name,
             ports={'8000/tcp': port},
             detach=True,
         )
-        _print(f"Container started: id={container.short_id}. Streaming logs: {_env_truthy('STREAM_DOCKER_LOGS', '1')}")
+        _print(
+            f"Container started: id={container.short_id}. Image={image}. "
+            f"Streaming logs: {_env_truthy('STREAM_DOCKER_LOGS', '1')}"
+        )
 
         # Optionally stream logs for visibility
         if _env_truthy("STREAM_DOCKER_LOGS", "1"):
