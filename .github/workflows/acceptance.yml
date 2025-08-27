@@ -1,0 +1,68 @@
+name: Acceptance (Docker-in-Docker)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+
+    # Start a Docker daemon as a sidecar (DinD) and connect via DOCKER_HOST
+    services:
+      docker:
+        image: docker:24-dind
+        privileged: true
+        env:
+          DOCKER_TLS_CERTDIR: ""
+        ports:
+          - 2375:2375
+
+    env:
+      DOCKER_HOST: tcp://localhost:2375
+      DOCKER_BUILDKIT: "1"
+      STREAM_DOCKER_LOGS: "0"
+      SNIPPET_LEN: "2000"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: '3.12'
+
+      - name: Cache UV
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}-py312-acceptance
+
+      - name: Wait for Docker daemon (DinD)
+        run: |
+          for i in {1..60}; do
+            if docker info >/dev/null 2>&1; then
+              echo "Docker is ready"; break;
+            fi
+            echo "Waiting for Docker... ($i)"; sleep 2;
+          done
+          docker version
+          docker info
+
+      - name: Pre-pull CTFd image
+        run: docker pull ctfd/ctfd:latest
+
+      - name: Sync dependencies (dev)
+        run: uv sync --dev
+
+      - name: Run acceptance tests
+        run: |
+          # Runs tests marked with `@pytest.mark.acceptance`
+          make test-acceptance
