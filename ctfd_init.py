@@ -47,6 +47,7 @@ class Config:
     max_backoff: int = 30
     jitter: bool = True
     verify_tls: bool = True
+    snippet_len: int = 1200
 
     @classmethod
     def from_env(cls) -> Config:
@@ -59,6 +60,7 @@ class Config:
             attempts = int(os.environ.get("RETRY_ATTEMPTS", "60"))
             backoff = int(os.environ.get("RETRY_BACKOFF_SECONDS", "2"))
             max_backoff = int(os.environ.get("MAX_BACKOFF_SECONDS", "30"))
+            snippet_len = int(os.environ.get("SNIPPET_LEN", "1200"))
         except ValueError as e:
             raise SetupError(
                 f"Invalid integer value in environment variable: {e}", exit_code=12
@@ -76,14 +78,47 @@ class Config:
             max_backoff=max_backoff,
             jitter=os.environ.get("JITTER", "true").lower() == "true",
             verify_tls=os.environ.get("VERIFY_TLS", "true").lower() == "true",
+            snippet_len=snippet_len,
         )
 
 
 def extract_nonce(html: str) -> str | None:
-    """Extract CSRF nonce from setup HTML."""
-    match = re.search(r"name=['\"]nonce['\"]\s+value=['\"]([^'\"]+)['\"]", html)
-    if match:
-        return match.group(1)
+    """Extract CSRF nonce from setup HTML.
+
+    CTFd variants expose the CSRF token in a few ways. Try common patterns:
+    - Hidden input name="nonce" value="..."
+    - Hidden/meta input with name="csrf"/"csrf_token"/"csrf-token"
+    - JS assignment: var csrfNonce = "..." or var nonce = "..."
+    - JSON-ish: "nonce":"..."
+    """
+    patterns = [
+        # Hidden input with name="nonce" and a value attr (any order)
+        r"<input[^>]*name=['\"]nonce['\"][^>]*value=['\"]([^'\">]+)['\"][^>]*>",
+        r"<input[^>]*value=['\"]([^'\">]+)['\"][^>]*name=['\"]nonce['\"][^>]*>",
+
+        # Meta tag variant for nonce (any order)
+        r"<meta[^>]*name=['\"]nonce['\"][^>]*content=['\"]([^'\">]+)['\"][^>]*>",
+        r"<meta[^>]*content=['\"]([^'\">]+)['\"][^>]*name=['\"]nonce['\"][^>]*>",
+
+        # CSRF meta/input using common names (any order)
+        r"name=['\"]csrf(?:_token|-token)?['\"][^>]*\s(?:content|value)=['\"]([^'\"]+)",
+        r"(?:content|value)=['\"]([^'\"]+)['\"][^>]*\sname=['\"]csrf(?:_token|-token)?['\"]",
+
+        # JS assignment forms
+        r"var\s+(?:csrfNonce|nonce)\s*=\s*['\"]([^'\"]+)",
+
+        # JSON-ish inline data
+        r"\"nonce\"\s*:\s*\"([^\"]+)\"",
+    ]
+    for pat in patterns:
+        m = re.search(pat, html, re.IGNORECASE)
+        if m:
+            # Some alternation patterns capture in group 1 or 2 depending on order.
+            # Pick the first non-empty group.
+            for i in range(1, (m.lastindex or 1) + 1):
+                val = m.group(i)
+                if val:
+                    return val
     return None
 
 
@@ -218,6 +253,20 @@ def configure(cfg: Config) -> None:
                     return
                 last_error = "setup POST did not complete configuration"
             else:
+                # Log a larger diagnostic snippet to aid debugging (configurable length)
+                snippet = resp.text[: cfg.snippet_len ].replace("\n", " ")
+                LOG.info(
+                    json.dumps(
+                        {
+                            "level": "info",
+                            "ts": datetime.datetime.now(datetime.UTC).isoformat(),
+                            "msg": "Nonce not found in setup page",
+                            "status": resp.status_code,
+                            "snippet": snippet,
+                            "snippet_len": len(snippet),
+                        }
+                    )
+                )
                 last_error = "nonce not found in setup page"
         _sleep_with_backoff(cfg, attempt)
     if last_error == "nonce not found in setup page":
